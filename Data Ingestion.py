@@ -4,20 +4,17 @@
 
 # COMMAND ----------
 
-from pyspark.sql.functions import current_timestamp
-def process_and_write_stream(df, name):
-    df_with_ingestion_date = df.withColumn("ingestion_date", current_timestamp())
-    df_non_null = df_with_ingestion_date.dropna(how='all')
-    (df_non_null.writeStream
-     .format("delta")
-     .option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_{name}")
-     .outputMode("append")
-     .trigger(AvailableNow=True)
-     .table(f"capstone_project2.bronze.{name}"))
+# MAGIC %sql
+# MAGIC select * from csv.`dbfs:/mnt/adlssonydatabricks/raw/project2/races/races.csv`
 
 # COMMAND ----------
 
-dbutils.fs.rm("dbfs:/FileStore/checkpoints2_driver", True)  
+from pyspark.sql.functions import current_timestamp
+
+
+# COMMAND ----------
+
+dbutils.fs.rm("dbfs:/FileStore/checkpoints2_driver", True)
 
 # COMMAND ----------
 
@@ -32,11 +29,14 @@ df_driver = (spark.readStream
       .option("cloudFiles.schemaLocation", "dbfs:/FileStore/schemas_capstone2driver")
       .option("cloudFiles.inferColumnTypes","true")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/drivers/"))
-display(df_driver)
-
-# COMMAND ----------
-
-process_and_write_stream(df_driver, "driver")
+df_driver_with_ingestion_date = df_driver.withColumn("ingestion_date", current_timestamp())
+df_driver_non_null = df_driver_with_ingestion_date.dropna(how='all')
+(df_driver_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_driver")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.driver"))
 
 # COMMAND ----------
 
@@ -52,11 +52,14 @@ df_circuits = (spark.readStream
       .option("header","true")
       .option("cloudFiles.inferColumnTypes","true")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/circuits/"))
-display(df_circuits)
-
-# COMMAND ----------
-
-process_and_write_stream(df_circuits, "circuits")
+df_circuits_with_ingestion_date = df_circuits.withColumn("ingestion_date", current_timestamp())
+df_circuits_non_null = df_circuits_with_ingestion_date.dropna(how='all')
+(df_circuits_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_circuits")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.circuits"))
 
 # COMMAND ----------
 
@@ -77,11 +80,14 @@ df_races = (spark.readStream
 
 df_races = df_races.withColumn("timestamp", to_timestamp(concat(col("date"), lit(" "), col("time"))))
 
-display(df_races)
-
-# COMMAND ----------
-
-process_and_write_stream(df_races, "races")
+df_races_with_ingestion_date = df_races.withColumn("ingestion_date", current_timestamp())
+df_races_non_null = df_races_with_ingestion_date.dropna(how='all')
+(df_races_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_races")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.races"))
 
 # COMMAND ----------
 
@@ -90,18 +96,21 @@ process_and_write_stream(df_races, "races")
 
 # COMMAND ----------
 
-
 df_cons = (spark.readStream
       .format("cloudFiles")
       .option("cloudFiles.format", "json")
       .option("cloudFiles.schemaLocation", "dbfs:/FileStore/schemas_capstone2constructors")
       .option("cloudFiles.inferColumnTypes","true")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/constructors/"))
-display(df_cons)
 
-# COMMAND ----------
-
-process_and_write_stream(df_cons, "constructors")
+df_cons_with_ingestion_date = df_cons.withColumn("ingestion_date", current_timestamp())
+df_cons_non_null = df_cons_with_ingestion_date.dropna(how='all')
+(df_cons_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_constructors")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.constructors"))
 
 # COMMAND ----------
 
@@ -110,7 +119,7 @@ process_and_write_stream(df_cons, "constructors")
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, current_timestamp
 
 df_results = (spark.readStream
       .format("cloudFiles")
@@ -120,18 +129,20 @@ df_results = (spark.readStream
       .option("cloudFiles.schemaHints", "fastestLap INTEGER, fastestLapSpeed DOUBLE, fastestLapTime STRING, milliseconds INTEGER")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/results/"))
 
-display(df_results)
+df_results.display()
+df_results_with_ingestion_date = df_results.withColumn("ingestion_date", current_timestamp())
+df_results_non_null = df_results_with_ingestion_date.dropna(how='all')
+(df_results_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_results")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.results"))
 
 # COMMAND ----------
 
-from pyspark.sql.functions import split, expr
-
-df_results1 = df_results.withColumn("fastestLap", col("fastestLap").cast("integer")) \
-                       .withColumn("fastestLapSpeed", col("fastestLapSpeed").cast("double")) \
-                       .withColumn("fastestLapTime", expr("split(fastestLapTime, ':')[0] * 60 + split(fastestLapTime, ':')[1]").cast("double"))\
-                       .withColumn("milliseconds", col("milliseconds").cast("integer"))
-
-display(df_results1)
+# MAGIC %sql
+# MAGIC select * from capstone_project2.bronze.results
 
 # COMMAND ----------
 
@@ -143,11 +154,14 @@ df_pitstops = (spark.readStream
       .option("cloudFiles.schemaHints", "duration DOUBLE, time TIMESTAMP")
       .option("multiline", "true")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/pitstops/"))
-df_pitstops.display()
-
-# COMMAND ----------
-
-process_and_write_stream(df_pitstops, "pitstops")
+df_pitstops_with_ingestion_date = df_pitstops.withColumn("ingestion_date", current_timestamp())
+df_pitstops_non_null = df_pitstops_with_ingestion_date.dropna(how='all')
+(df_pitstops_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_pitstops")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.pitstops"))
 
 # COMMAND ----------
 
@@ -178,7 +192,14 @@ df_laptime = (spark.readStream
       .option("cloudFiles.schemaLocation", "dbfs:/FileStore/schemas_capstone2laptimes")
       .schema(schema)
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/laptimes/lap_times/"))
-display(df_laptime)
+df_laptime_with_ingestion_date = df_laptime.withColumn("ingestion_date", current_timestamp())
+df_laptime_non_null = df_laptime_with_ingestion_date.dropna(how='all')
+(df_laptime_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_laptimes")
+.outputMode("append")
+.trigger(AvailableNow=True)
+.table(f"capstone_project2.bronze.laptimes"))
 
 # COMMAND ----------
 
@@ -192,5 +213,18 @@ df_qualifying = (spark.readStream
       .option("cloudFiles.format", "json")
       .option("cloudFiles.schemaLocation", "dbfs:/FileStore/schemas_capstone2qualifying")
       .option("multiline", "true")
+      .option("cloudFiles.inferColumnTypes", "true")
       .load("dbfs:/mnt/adlssonydatabricks/raw/project2/qualifying/qualifying"))
-display(df_qualifying)
+df_qualifying_with_ingestion_date = df_qualifying.withColumn("ingestion_date", current_timestamp())
+df_qualifying_non_null = df_qualifying_with_ingestion_date.dropna(how='all')
+(df_qualifying_non_null.writeStream
+.format("delta")
+.option("checkpointLocation", f"dbfs:/FileStore/checkpoints2_qualifying")
+.outputMode("append")
+.trigger(availableNow=True)
+.table(f"capstone_project2.bronze.qualifying"))
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from capstone_project2.bronze.qualifying
